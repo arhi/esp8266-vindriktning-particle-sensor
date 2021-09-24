@@ -5,7 +5,7 @@
 #include "Types.h"
 
 namespace SerialCom {
-    constexpr static const uint8_t PIN_UART_RX = 4; // D2 on Wemos D1 Mini
+    constexpr static const uint8_t PIN_UART_RX =  4; // D2 on Wemos D1 Mini
     constexpr static const uint8_t PIN_UART_TX = 13; // UNUSED
 
     SoftwareSerial sensorSerial(PIN_UART_RX, PIN_UART_TX);
@@ -28,11 +28,17 @@ namespace SerialCom {
          *         MSB  DF 3     DF 4  LSB
          * uint16_t = xxxxxxxx xxxxxxxx
          */
-        const uint16_t pm25 = (serialRxBuf[5] << 8) | serialRxBuf[6];
+        const uint16_t pm25 = (serialRxBuf[5] << 8)        | serialRxBuf[6];   // DF3*256 + DF4
+        const uint16_t pm01 = ((serialRxBuf[9] << 8) ^ 1)  | serialRxBuf[10];  // DF7*256 ^ 1 + DF8
+        const uint16_t pm10 = ((serialRxBuf[13] << 8) ^ 1) | serialRxBuf[14];  // DF11*256 ^ 1 + DF12
 
-        Serial.printf("Received PM 2.5 reading: %d\n", pm25);
+        Serial.printf("Received PM2.5 reading: %d\r\n", pm25);
+        Serial.printf("Received PM1.0 reading: %d\r\n", pm01);
+        Serial.printf("Received PM10 reading: %d\r\n", pm10);
 
         state.measurements[state.measurementIdx] = pm25;
+        state.avgPM01 = (state.avgPM01 + pm01 ) / 2;
+        state.avgPM10 = (state.avgPM10 + pm10 ) / 2;
 
         state.measurementIdx = (state.measurementIdx + 1) % 5;
 
@@ -46,7 +52,7 @@ namespace SerialCom {
             state.avgPM25 = avgPM25;
             state.valid = true;
 
-            Serial.printf("New Avg PM25: %d\n", state.avgPM25);
+            Serial.printf("New Avg PM25: %d\r\n", state.avgPM25);
         }
 
         clearRxBuf();
@@ -56,7 +62,7 @@ namespace SerialCom {
         bool headerValid = serialRxBuf[0] == 0x16 && serialRxBuf[1] == 0x11 && serialRxBuf[2] == 0x0B;
 
         if (!headerValid) {
-            Serial.println("Received message with invalid header.");
+            Serial.print("Received message with invalid header.\r\n");
         }
 
         return headerValid;
@@ -70,7 +76,7 @@ namespace SerialCom {
         }
 
         if (checksum != 0) {
-            Serial.printf("Received message with invalid checksum. Expected: 0. Actual: %d\n", checksum);
+            Serial.printf("Received message with invalid checksum. Expected: 0. Actual: %d\r\n", checksum);
         }
 
         return checksum == 0;
@@ -93,13 +99,13 @@ namespace SerialCom {
                 clearRxBuf();
             }
         }
-        Serial.println("Done.");
+        Serial.print("Done.\r\n");
 
         if (isValidHeader() && isValidChecksum()) {
             parseState(state);
 
             Serial.printf(
-                "Current measurements: %d, %d, %d, %d, %d\n",
+                "Current measurements: %d, %d, %d, %d, %d\r\n",
 
                 state.measurements[0],
                 state.measurements[1],

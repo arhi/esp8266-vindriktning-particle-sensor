@@ -38,6 +38,8 @@ char MQTT_TOPIC_COMMAND[128];
 
 char MQTT_TOPIC_AUTOCONF_WIFI_SENSOR[128];
 char MQTT_TOPIC_AUTOCONF_PM25_SENSOR[128];
+char MQTT_TOPIC_AUTOCONF_PM01_SENSOR[128];
+char MQTT_TOPIC_AUTOCONF_PM10_SENSOR[128];
 
 bool shouldSaveConfig = false;
 
@@ -49,13 +51,15 @@ void setup() {
     Serial.begin(115200);
     SerialCom::setup();
 
-    Serial.println("\n");
-    Serial.println("Hello from esp8266-vindriktning-particle-sensor");
-    Serial.printf("Core Version: %s\n", ESP.getCoreVersion().c_str());
-    Serial.printf("Boot Version: %u\n", ESP.getBootVersion());
-    Serial.printf("Boot Mode: %u\n", ESP.getBootMode());
-    Serial.printf("CPU Frequency: %u MHz\n", ESP.getCpuFreqMHz());
-    Serial.printf("Reset reason: %s\n", ESP.getResetReason().c_str());
+    memset(state.measurements, 0, 10);
+
+    Serial.print("\r\n");
+    Serial.print("Hello from esp8266-vindriktning-particle-sensor\r\n");
+    Serial.printf("Core Version: %s\r\n", ESP.getCoreVersion().c_str());
+    Serial.printf("Boot Version: %u\r\n", ESP.getBootVersion());
+    Serial.printf("Boot Mode: %u\r\n", ESP.getBootMode());
+    Serial.printf("CPU Frequency: %u MHz\r\n", ESP.getCpuFreqMHz());
+    Serial.printf("Reset reason: %s\r\n", ESP.getResetReason().c_str());
 
     delay(3000);
 
@@ -65,6 +69,8 @@ void setup() {
     snprintf(MQTT_TOPIC_COMMAND, 127, "%s/%s/command", FIRMWARE_PREFIX, identifier);
 
     snprintf(MQTT_TOPIC_AUTOCONF_PM25_SENSOR, 127, "homeassistant/sensor/%s/%s_pm25/config", FIRMWARE_PREFIX, identifier);
+    snprintf(MQTT_TOPIC_AUTOCONF_PM01_SENSOR, 127, "homeassistant/sensor/%s/%s_pm01/config", FIRMWARE_PREFIX, identifier);
+    snprintf(MQTT_TOPIC_AUTOCONF_PM10_SENSOR, 127, "homeassistant/sensor/%s/%s_pm10/config", FIRMWARE_PREFIX, identifier);
     snprintf(MQTT_TOPIC_AUTOCONF_WIFI_SENSOR, 127, "homeassistant/sensor/%s/%s_wifi/config", FIRMWARE_PREFIX, identifier);
 
     WiFi.hostname(identifier);
@@ -78,18 +84,18 @@ void setup() {
     mqttClient.setBufferSize(2048);
     mqttClient.setCallback(mqttCallback);
 
-    Serial.printf("Hostname: %s\n", identifier);
-    Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("Hostname: %s\r\n", identifier);
+    Serial.printf("IP: %s\r\n", WiFi.localIP().toString().c_str());
 
-    Serial.println("-- Current GPIO Configuration --");
-    Serial.printf("PIN_UART_RX: %d\n", SerialCom::PIN_UART_RX);
+    Serial.print("-- Current GPIO Configuration --\r\n");
+    Serial.printf("PIN_UART_RX: %d\r\n", SerialCom::PIN_UART_RX);
 
     mqttReconnect();
 }
 
 void setupOTA() {
-    ArduinoOTA.onStart([]() { Serial.println("Start"); });
-    ArduinoOTA.onEnd([]() { Serial.println("\nEnd"); });
+    ArduinoOTA.onStart([]() { Serial.print("Start\r\n"); });
+    ArduinoOTA.onEnd([]() { Serial.print("\r\nEnd\r\n"); });
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
         Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
     });
@@ -125,14 +131,14 @@ void loop() {
         statusPublishPreviousMillis = currentMillis;
 
         if (state.valid) {
-            printf("Publish state\n");
+            printf("Publish state\r\n");
             publishState();
         }
     }
 
     if (!mqttClient.connected() && currentMillis - lastMqttConnectionAttempt >= mqttConnectionInterval) {
         lastMqttConnectionAttempt = currentMillis;
-        printf("Reconnect mqtt\n");
+        printf("Reconnect mqtt\r\n");
         mqttReconnect();
     }
 }
@@ -197,6 +203,8 @@ void publishState() {
     wifiJson["rssi"] = WiFi.RSSI();
 
     stateJson["pm25"] = state.avgPM25;
+    stateJson["pm10"] = state.avgPM10;
+    stateJson["pm1"] = state.avgPM01;
 
     stateJson["wifi"] = wifiJson.as<JsonObject>();
 
@@ -248,6 +256,20 @@ void publishAutoConfig() {
 
     serializeJson(autoconfPayload, mqttPayload);
     mqttClient.publish(&MQTT_TOPIC_AUTOCONF_PM25_SENSOR[0], &mqttPayload[0], true);
+
+    autoconfPayload["name"] = identifier + String(" PM 10");
+    autoconfPayload["value_template"] = "{{value_json.pm10}}";
+    autoconfPayload["unique_id"] = identifier + String("_pm10");
+
+    serializeJson(autoconfPayload, mqttPayload);
+    mqttClient.publish(&MQTT_TOPIC_AUTOCONF_PM10_SENSOR[0], &mqttPayload[0], true);
+
+    autoconfPayload["name"] = identifier + String(" PM 1");
+    autoconfPayload["value_template"] = "{{value_json.pm1}}";
+    autoconfPayload["unique_id"] = identifier + String("_pm1");
+
+    serializeJson(autoconfPayload, mqttPayload);
+    mqttClient.publish(&MQTT_TOPIC_AUTOCONF_PM01_SENSOR[0], &mqttPayload[0], true);
 
     autoconfPayload.clear();
 }
