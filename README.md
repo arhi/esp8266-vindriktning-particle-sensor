@@ -14,6 +14,14 @@ Also, ArduinoOTA is used, so that firmware updates are possible even with a reas
 As the ESP8266 is 5V-tolerant, this should there shouldn't be any issues, however I haven't had time to test this for longer periods of time.
 Therefore, if the ESP burns out after a while, just add a voltage divider or something.
 
+## FORK
+
+This fork adds readout of pm1.0 and pm10 values from the sensor too according to the sensor documentation
+
+![SerialPacketInfo](./img/packetnfo.jpg)
+
+The pm1.0 values seem to be off but pm10 values corespond to my other pm10 sensors
+
 ## Prerequisites
 
 To extend your air quality sensor, you will need
